@@ -236,12 +236,20 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 			priority = "CRIT"
 		}
 
+		// Get project name if task has a project
+		projectStr := ""
+		if t.ProjectID != "" {
+			if proj, err := projectRepo.GetByID(ctx, t.ProjectID); err == nil {
+				projectStr = fmt.Sprintf("[%s] ", proj.Name)
+			}
+		}
+
 		changelistStr := ""
 		if t.Changelist != "" {
 			changelistStr = fmt.Sprintf(" (%s)", t.Changelist)
 		}
 
-		fmt.Printf("  %s [%s] %s%s (ID: %s)\n", status, priority, t.Title, changelistStr, t.ID)
+		fmt.Printf("  %s [%s] %s%s%s (ID: %s)\n", status, priority, projectStr, t.Title, changelistStr, t.ID)
 	}
 
 	return nil
