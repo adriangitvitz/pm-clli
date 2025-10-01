@@ -2,7 +2,7 @@
 
 ## Overview
 
-Project Manager CLI (pm) is a powerful command-line tool for managing projects and tasks locally. It features both command-line interface (CLI) and terminal user interface (TUI) modes.
+Project Manager CLI (pm) is a powerful command-line tool for managing projects and tasks locally. It features both command-line interface (CLI) and terminal user interface (TUI) modes with full support for time tracking, exports, configuration management, and Git integration.
 
 ## Installation
 
@@ -10,14 +10,17 @@ Project Manager CLI (pm) is a powerful command-line tool for managing projects a
 ```bash
 git clone https://github.com/adriannajera/project-manager-cli
 cd project-manager-cli
-go build -o pm cmd/pm/main.go
-sudo mv pm /usr/local/bin/
+make build
+sudo make install-system
 ```
 
-### Direct Build
+### Using Go Install
 ```bash
 go install github.com/adriannajera/project-manager-cli/cmd/pm@latest
 ```
+
+### Pre-built Binary
+Download the latest release for your platform from the releases page and add it to your PATH.
 
 ## Quick Start
 
@@ -30,6 +33,9 @@ pm
 ### Command-Line Mode
 Use specific commands for quick operations:
 ```bash
+# Get help
+pm help
+
 # Create a task
 pm task add "Implement user authentication"
 
@@ -42,8 +48,15 @@ pm task complete <task-id>
 # Create a project
 pm project add "Web Application"
 
-# List projects
-pm project list
+# Track time
+pm time start --task <task-id>
+pm time stop
+
+# Export data
+pm export tasks --format json --output tasks.json
+
+# View configuration
+pm config show
 ```
 
 ## Task Management
@@ -52,46 +65,54 @@ pm project list
 ```bash
 # Basic task creation
 pm task add "Fix login bug"
-pm task create "Add user profiles"
 
-# With natural language due dates (future feature)
-pm task add "Deploy to production" --due "tomorrow"
-pm task add "Review pull requests" --due "friday"
+# With priority
+pm task add "Deploy to production" --priority high
+
+# With project and tags
+pm task add "Add user profiles" --project "web-app" --tags feature,backend
+
+# With changelist/CL tracking
+pm task add "Fix authentication" --cl 123456
+
+# With description
+pm task add "Review pull requests" --description "Weekly PR review"
 ```
 
 ### Listing Tasks
 ```bash
 # List all tasks
 pm task list
-pm task ls
-
-# Filter by status
-pm task list --status todo
-pm task list --status doing
-pm task list --status done
+pm task ls  # alias
 
 # Filter by project
 pm task list --project "web-app"
-
-# Search tasks
-pm task list --search "authentication"
 ```
+
+**Note:** Advanced filtering by status and search are currently available in the TUI mode.
 
 ### Updating Tasks
 ```bash
-# Complete a task
+# Update task status
+pm task update <task-id> --status doing
+pm task update <task-id> --status done
+pm task update <task-id> --status blocked
+
+# Update task priority
+pm task update <task-id> --priority high
+pm task update <task-id> --priority critical
+
+# Update task title
+pm task update <task-id> --title "New task title"
+
+# Update changelist
+pm task update <task-id> --cl 789012
+
+# Complete a task (shortcut)
 pm task complete <task-id>
-pm task done <task-id>
-
-# Start working on a task
-pm task start <task-id>
-
-# Block a task
-pm task block <task-id>
 
 # Delete a task
 pm task delete <task-id>
-pm task rm <task-id>
 ```
 
 ## Project Management
@@ -100,40 +121,45 @@ pm task rm <task-id>
 ```bash
 # Create a new project
 pm project add "Mobile App"
-pm project create "API Backend"
 ```
 
 ### Listing Projects
 ```bash
-# List all projects
+# List all projects (shows name and ID)
 pm project list
-pm project ls
-
-# Filter by status
-pm project list --status active
-pm project list --status archived
 ```
 
-### Managing Projects
+Example output:
+```
+Projects:
+  Web Application (ID: b699950c-ab65-4d4d-8174-6f0dcf2fb6d4)
+  Mobile App (ID: a1b2c3d4-e5f6-7890-abcd-ef1234567890)
+```
+
+### Deleting Projects
 ```bash
-# Archive a project
-pm project archive <project-id>
-
-# Complete a project
-pm project complete <project-id>
-
-# Activate a project
-pm project activate <project-id>
+# Delete a project
+pm project delete <project-id>
 ```
+
+**Important:** When you delete a project, all associated tasks and time entries are automatically deleted (cascade delete).
+
+**Note:** Project status management (archive, complete, activate) is currently available in the TUI mode.
 
 ## Time Tracking
+
+Time tracking is fully integrated and allows you to track time spent on tasks with detailed reporting.
 
 ### Starting Time Tracking
 ```bash
 # Start tracking time for a task
 pm time start --task <task-id>
+
+# With description
 pm time start --task <task-id> --description "Working on authentication"
 ```
+
+**Note:** Starting time tracking automatically updates the task status to "doing" if it's not already.
 
 ### Stopping Time Tracking
 ```bash
@@ -141,71 +167,98 @@ pm time start --task <task-id> --description "Working on authentication"
 pm time stop
 ```
 
+This will display the duration and save the time entry to the database.
+
+### Listing Time Entries
+```bash
+# List all time entries
+pm time list
+```
+
 ### Time Reports
 ```bash
 # Today's time report
 pm time report --today
+
+# Yesterday's report
+pm time report --yesterday
 
 # This week's report
 pm time report --week
 
 # This month's report
 pm time report --month
-
-# Custom date range
-pm time report --start "2023-01-01" --end "2023-01-31"
 ```
+
+Reports show:
+- Total duration
+- Breakdown by task
+- Task titles and IDs
 
 ## Git Integration
 
-When working in a Git repository, the CLI automatically:
-- Associates tasks with the current branch
-- Can create commit hooks to reference task IDs in commit messages
-- Tracks which branch a task was worked on
+The CLI integrates with Git repositories to enhance your workflow.
 
-### Manual Git Operations
+### Commit Hooks
 ```bash
 # Create commit hook for a task
 pm git hook --task <task-id>
 
 # Remove commit hook
 pm git hook --remove
-
-# List tasks for current branch
-pm task list --branch current
 ```
 
-## Export and Import
+When you create a commit hook, the CLI will automatically prepend `[Task #<task-id>]` to your commit messages, helping you track which commits are related to which tasks.
 
-### Exporting Data
+**Example:**
 ```bash
-# Export tasks to JSON
+# Create hook
+pm git hook --task abc123
+
+# Your commit
+git commit -m "Fix authentication bug"
+
+# Actual commit message will be:
+# [Task #abc123] Fix authentication bug
+```
+
+## Export
+
+The export functionality allows you to export your data to various formats for backup, reporting, or integration with other tools.
+
+### Exporting Tasks
+```bash
+# Export tasks to JSON (default)
+pm export tasks --format json
+
+# Export to file
 pm export tasks --format json --output tasks.json
 
 # Export tasks to CSV
 pm export tasks --format csv --output tasks.csv
 
-# Export tasks with due dates to iCal
+# Export tasks with due dates to iCal format
 pm export tasks --format ical --output tasks.ics
-
-# Export time entries
-pm export time --format csv --output timesheet.csv
-
-# Export projects
-pm export projects --format json --output projects.json
 ```
 
-### Filtering Exports
+**Supported formats:** `json`, `csv`, `ical`
+
+### Exporting Time Entries
 ```bash
-# Export only completed tasks
-pm export tasks --status done --format json
+# Export time entries to JSON
+pm export time --format json
 
-# Export tasks from specific project
-pm export tasks --project "web-app" --format csv
-
-# Export time entries for date range
-pm export time --start "2023-01-01" --end "2023-01-31" --format csv
+# Export to CSV file
+pm export time --format csv --output timesheet.csv
 ```
+
+**Supported formats:** `json`, `csv`
+
+### Export Use Cases
+- **Backup:** Export all data to JSON for safekeeping
+- **Reporting:** Export time entries to CSV for billing or reports
+- **Calendar Integration:** Export tasks with due dates to iCal for calendar apps
+- **Data Analysis:** Export to CSV for analysis in Excel/Google Sheets
 
 ## Configuration
 
@@ -233,15 +286,35 @@ aliases:
 
 ### Viewing Configuration
 ```bash
+# Display current configuration
 pm config show
-pm config path
 ```
+
+This will show all configuration settings including database path, git integration status, time/date formats, theme colors, and aliases.
 
 ### Updating Configuration
 ```bash
+# Enable/disable git integration
+pm config set git_integration true
 pm config set git_integration false
+
+# Set default project
 pm config set default_project "my-project"
+
+# Customize time format
+pm config set time_format "15:04"
+
+# Customize date format
+pm config set date_format "2006-01-02"
 ```
+
+**Available configuration keys:**
+- `git_integration` - Enable/disable git features (true/false)
+- `default_project` - Default project for new tasks
+- `time_format` - Time display format
+- `date_format` - Date display format
+
+**Note:** Theme and alias customization requires manual editing of `~/.pm/config.yaml`
 
 ## Interactive Dashboard (TUI)
 
@@ -342,13 +415,8 @@ pm version
 
 # Show help
 pm help
-pm task help
-pm project help
-pm time help
-
-# Show command-specific help
-pm task add --help
-pm time start --help
+pm --help
+pm -h
 ```
 
 ## Advanced Features
@@ -359,14 +427,20 @@ The CLI is designed to be scriptable:
 ```bash
 #!/bin/bash
 # Daily standup report
-echo "Tasks completed yesterday:"
-pm task list --status done --since yesterday
 
-echo "Tasks planned for today:"
-pm task list --status todo --due today
+echo "=== Daily Standup Report ==="
+echo ""
 
 echo "Time tracked yesterday:"
 pm time report --yesterday
+
+echo ""
+echo "All current tasks:"
+pm task list
+
+echo ""
+echo "Export backup:"
+pm export tasks --format json --output backup-$(date +%Y%m%d).json
 ```
 
 ### Integration with Other Tools
@@ -380,6 +454,66 @@ pm time report --yesterday
 - Archive completed projects regularly
 - Export old data and clean database periodically
 - Use aliases for frequently used commands
+
+## Command Reference
+
+### Complete Command List
+
+```bash
+# General
+pm                              # Launch interactive TUI
+pm help                         # Show help
+pm version                      # Show version
+
+# Task Commands
+pm task add <title> [flags]     # Create task
+pm task list [flags]            # List tasks
+pm task update <id> [flags]     # Update task
+pm task complete <id>           # Complete task
+pm task delete <id>             # Delete task
+
+# Task Flags
+--priority <low|medium|high|critical>
+--project <name>
+--tags <tag1,tag2>
+--cl <changelist>
+--description <text>
+--title <text>
+--status <todo|doing|done|blocked>
+
+# Project Commands
+pm project add <name>           # Create project
+pm project list                 # List projects
+pm project delete <id>          # Delete project (cascades to tasks)
+
+# Time Commands
+pm time start --task <id>       # Start time tracking
+pm time stop                    # Stop time tracking
+pm time list                    # List time entries
+pm time report [flags]          # Generate report
+
+# Time Report Flags
+--today                         # Today's report
+--yesterday                     # Yesterday's report
+--week                          # This week's report
+--month                         # This month's report
+
+# Export Commands
+pm export tasks [flags]         # Export tasks
+pm export time [flags]          # Export time entries
+
+# Export Flags
+--format <json|csv|ical>        # Output format
+--output <file>                 # Output file path
+
+# Config Commands
+pm config show                  # Show configuration
+pm config set <key> <value>     # Update configuration
+
+# Git Commands
+pm git hook --task <id>         # Create commit hook
+pm git hook --remove            # Remove commit hook
+```
 
 ## Support and Contribution
 
