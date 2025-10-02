@@ -199,6 +199,23 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 				options.ProjectID = projectNameOrID
 			}
 			i++ // Skip the next argument as it's the value
+		} else if args[i] == "--status" && i+1 < len(args) {
+			statusStr := args[i+1]
+			var status domain.TaskStatus
+			switch statusStr {
+			case "todo":
+				status = domain.StatusTodo
+			case "doing":
+				status = domain.StatusDoing
+			case "done":
+				status = domain.StatusDone
+			case "blocked":
+				status = domain.StatusBlocked
+			default:
+				return fmt.Errorf("invalid status: %s (must be todo, doing, done, or blocked)", statusStr)
+			}
+			options.Status = append(options.Status, status)
+			i++ // Skip the next argument as it's the value
 		}
 	}
 
