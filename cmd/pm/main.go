@@ -188,6 +188,7 @@ func handleTimeCommand(timeSvc *timeService.Service, args []string) error {
 func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqlite.ProjectRepository, args []string) error {
 	// Parse flags
 	options := task.ListOptions{}
+	minimal := false
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--project" && i+1 < len(args) {
 			projectNameOrID := args[i+1]
@@ -219,6 +220,8 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 			}
 			options.Status = append(options.Status, status)
 			i++ // Skip the next argument as it's the value
+		} else if args[i] == "--minimal" {
+			minimal = true
 		}
 	}
 
@@ -244,49 +247,59 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 			status = "[!]"
 		}
 
-		priority := ""
-		switch t.Priority {
-		case 0: // Low
-			priority = "LOW"
-		case 1: // Normal
-			priority = "NORM"
-		case 2: // High
-			priority = "HIGH"
-		case 3: // Critical
-			priority = "CRIT"
-		}
-
-		fmt.Printf("  %s [%s] %s (%s)\n", status, priority, t.Title, t.ID)
-
-		// Get project name if task has a project
-		projectName := ""
-		if t.ProjectID != "" {
-			if proj, err := projectRepo.GetByID(ctx, t.ProjectID); err == nil {
-				projectName = proj.Name
+		if minimal {
+			// Minimal format: status, name, cl, id
+			changelistStr := ""
+			if t.Changelist != "" {
+				changelistStr = t.Changelist
 			}
-		}
-		fmt.Printf("     * Project: %s\n", projectName)
+			fmt.Printf("  %s %s cl:%s (%s)\n", status, t.Title, changelistStr, t.ID)
+		} else {
+			// Full format with all details
+			priority := ""
+			switch t.Priority {
+			case 0: // Low
+				priority = "LOW"
+			case 1: // Normal
+				priority = "NORM"
+			case 2: // High
+				priority = "HIGH"
+			case 3: // Critical
+				priority = "CRIT"
+			}
 
-		// Show changelist if exists
-		changelistStr := ""
-		if t.Changelist != "" {
-			changelistStr = t.Changelist
-		}
-		fmt.Printf("     * cl: %s\n", changelistStr)
+			fmt.Printf("  %s [%s] %s (%s)\n", status, priority, t.Title, t.ID)
 
-		// Show workspace if exists
-		workspaceStr := ""
-		if t.Workspace != "" {
-			workspaceStr = t.Workspace
-		}
-		fmt.Printf("     * workspace: %s\n", workspaceStr)
+			// Get project name if task has a project
+			projectName := ""
+			if t.ProjectID != "" {
+				if proj, err := projectRepo.GetByID(ctx, t.ProjectID); err == nil {
+					projectName = proj.Name
+				}
+			}
+			fmt.Printf("     * Project: %s\n", projectName)
 
-		// Show completed date if task is done
-		completedStr := ""
-		if t.CompletedAt != nil {
-			completedStr = t.CompletedAt.Format("2006-01-02 15:04:05")
+			// Show changelist if exists
+			changelistStr := ""
+			if t.Changelist != "" {
+				changelistStr = t.Changelist
+			}
+			fmt.Printf("     * cl: %s\n", changelistStr)
+
+			// Show workspace if exists
+			workspaceStr := ""
+			if t.Workspace != "" {
+				workspaceStr = t.Workspace
+			}
+			fmt.Printf("     * workspace: %s\n", workspaceStr)
+
+			// Show completed date if task is done
+			completedStr := ""
+			if t.CompletedAt != nil {
+				completedStr = t.CompletedAt.Format("2006-01-02 15:04:05")
+			}
+			fmt.Printf("     * completed: %s\n", completedStr)
 		}
-		fmt.Printf("     * completed: %s\n", completedStr)
 	}
 
 	return nil
