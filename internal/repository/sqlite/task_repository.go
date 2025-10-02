@@ -25,14 +25,14 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	query := `
 		INSERT INTO tasks (
 			id, title, description, status, priority, project_id, parent_id,
-			tags, changelist, due_date, created_at, updated_at, completed_at, metadata
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			tags, changelist, workspace, due_date, created_at, updated_at, completed_at, metadata
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
 		task.ID, task.Title, task.Description, string(task.Status),
 		int(task.Priority), task.ProjectID, task.ParentID, string(tagsJSON),
-		task.Changelist, task.DueDate, task.CreatedAt, task.UpdatedAt, task.CompletedAt,
+		task.Changelist, task.Workspace, task.DueDate, task.CreatedAt, task.UpdatedAt, task.CompletedAt,
 		string(metadataJSON),
 	)
 
@@ -46,7 +46,7 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 func (r *TaskRepository) GetByID(ctx context.Context, id string) (*domain.Task, error) {
 	query := `
 		SELECT id, title, description, status, priority, project_id, parent_id,
-		       tags, changelist, due_date, created_at, updated_at, completed_at, metadata
+		       tags, changelist, workspace, due_date, created_at, updated_at, completed_at, metadata
 		FROM tasks WHERE id = ?
 	`
 
@@ -63,7 +63,7 @@ func (r *TaskRepository) GetByID(ctx context.Context, id string) (*domain.Task, 
 }
 
 func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]*domain.Task, error) {
-	query := "SELECT id, title, description, status, priority, project_id, parent_id, tags, changelist, due_date, created_at, updated_at, completed_at, metadata FROM tasks WHERE 1=1"
+	query := "SELECT id, title, description, status, priority, project_id, parent_id, tags, changelist, workspace, due_date, created_at, updated_at, completed_at, metadata FROM tasks WHERE 1=1"
 	args := []interface{}{}
 
 	if len(filter.Status) > 0 {
@@ -87,6 +87,11 @@ func (r *TaskRepository) List(ctx context.Context, filter domain.TaskFilter) ([]
 	if filter.ProjectID != "" {
 		query += " AND project_id = ?"
 		args = append(args, filter.ProjectID)
+	}
+
+	if filter.Workspace != "" {
+		query += " AND workspace = ?"
+		args = append(args, filter.Workspace)
 	}
 
 	if filter.DueBefore != nil {
@@ -142,14 +147,14 @@ func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	query := `
 		UPDATE tasks SET
 			title = ?, description = ?, status = ?, priority = ?,
-			project_id = ?, parent_id = ?, tags = ?, changelist = ?, due_date = ?,
+			project_id = ?, parent_id = ?, tags = ?, changelist = ?, workspace = ?, due_date = ?,
 			updated_at = ?, completed_at = ?, metadata = ?
 		WHERE id = ?
 	`
 
 	result, err := r.db.ExecContext(ctx, query,
 		task.Title, task.Description, string(task.Status), int(task.Priority),
-		task.ProjectID, task.ParentID, string(tagsJSON), task.Changelist, task.DueDate,
+		task.ProjectID, task.ParentID, string(tagsJSON), task.Changelist, task.Workspace, task.DueDate,
 		task.UpdatedAt, task.CompletedAt, string(metadataJSON), task.ID,
 	)
 
@@ -196,7 +201,7 @@ func (r *TaskRepository) GetByProject(ctx context.Context, projectID string) ([]
 func (r *TaskRepository) GetSubtasks(ctx context.Context, parentID string) ([]*domain.Task, error) {
 	query := `
 		SELECT id, title, description, status, priority, project_id, parent_id,
-		       tags, changelist, due_date, created_at, updated_at, completed_at, metadata
+		       tags, changelist, workspace, due_date, created_at, updated_at, completed_at, metadata
 		FROM tasks WHERE parent_id = ?
 		ORDER BY created_at ASC
 	`
@@ -226,12 +231,12 @@ type RowScanner interface {
 func (r *TaskRepository) scanTask(row RowScanner) (*domain.Task, error) {
 	var task domain.Task
 	var tagsJSON, metadataJSON string
-	var projectID, parentID, changelist sql.NullString
+	var projectID, parentID, changelist, workspace sql.NullString
 	var dueDate, completedAt sql.NullTime
 
 	err := row.Scan(
 		&task.ID, &task.Title, &task.Description, &task.Status,
-		&task.Priority, &projectID, &parentID, &tagsJSON, &changelist,
+		&task.Priority, &projectID, &parentID, &tagsJSON, &changelist, &workspace,
 		&dueDate, &task.CreatedAt, &task.UpdatedAt, &completedAt,
 		&metadataJSON,
 	)
@@ -250,6 +255,10 @@ func (r *TaskRepository) scanTask(row RowScanner) (*domain.Task, error) {
 
 	if changelist.Valid {
 		task.Changelist = changelist.String
+	}
+
+	if workspace.Valid {
+		task.Workspace = workspace.String
 	}
 
 	if dueDate.Valid {

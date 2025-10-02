@@ -9,6 +9,7 @@ type TaskFilter struct {
 	Status    []TaskStatus
 	Priority  []Priority
 	ProjectID string
+	Workspace string
 	Tags      []string
 	DueBefore *time.Time
 	DueAfter  *time.Time

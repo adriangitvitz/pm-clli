@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	migrationVersion = 2
+	migrationVersion = 3
 )
 
 var migrations = []string{
@@ -70,6 +70,9 @@ var migrations = []string{
 
 	// Migration v2: Add changelist column
 	`ALTER TABLE tasks ADD COLUMN changelist TEXT DEFAULT '';`,
+
+	// Migration v3: Add workspace column
+	`ALTER TABLE tasks ADD COLUMN workspace TEXT DEFAULT '';`,
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {
@@ -88,8 +91,17 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 	}
 	defer tx.Rollback()
 
-	for i, migration := range migrations {
-		if _, err := tx.ExecContext(ctx, migration); err != nil {
+	// Only run migrations that haven't been executed yet
+	// First 10 migrations are base schema, v2 is migration 11 (index 11), v3 is migration 12 (index 12)
+	startIndex := 0
+	if currentVersion > 0 {
+		// Base schema (migrations 0-9) + version migrations
+		// If we're at version 2, we've run migrations 0-11, so start at 12
+		startIndex = 10 + currentVersion
+	}
+
+	for i := startIndex; i < len(migrations); i++ {
+		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
 			return fmt.Errorf("failed to execute migration %d: %w", i, err)
 		}
 	}

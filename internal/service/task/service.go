@@ -41,6 +41,7 @@ type CreateTaskInput struct {
 	ParentID    *string
 	Tags        []string
 	Changelist  string
+	Workspace   string
 	DueDate     string // Natural language date
 }
 
@@ -55,6 +56,7 @@ type UpdateTaskInput struct {
 	ParentID    *string
 	Tags        []string
 	Changelist  *string
+	Workspace   *string
 	DueDate     *string // Natural language date
 }
 
@@ -63,6 +65,7 @@ type ListOptions struct {
 	Status    []domain.TaskStatus
 	Priority  []domain.Priority
 	ProjectID string
+	Workspace string
 	Tags      []string
 	Search    string
 	DueBefore *time.Time
@@ -83,6 +86,7 @@ func (s *Service) CreateTask(ctx context.Context, input CreateTaskInput) (*domai
 	task.ParentID = input.ParentID
 	task.Tags = input.Tags
 	task.Changelist = input.Changelist
+	task.Workspace = input.Workspace
 
 	// Parse due date if provided
 	if input.DueDate != "" {
@@ -175,6 +179,10 @@ func (s *Service) UpdateTask(ctx context.Context, input UpdateTaskInput) (*domai
 		task.Changelist = *input.Changelist
 	}
 
+	if input.Workspace != nil {
+		task.Workspace = *input.Workspace
+	}
+
 	if input.DueDate != nil {
 		if *input.DueDate == "" {
 			task.DueDate = nil
@@ -213,6 +221,7 @@ func (s *Service) ListTasks(ctx context.Context, options ListOptions) ([]*domain
 		Status:    options.Status,
 		Priority:  options.Priority,
 		ProjectID: options.ProjectID,
+		Workspace: options.Workspace,
 		Tags:      options.Tags,
 		Search:    options.Search,
 		DueBefore: options.DueBefore,

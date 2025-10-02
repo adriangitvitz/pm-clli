@@ -75,8 +75,15 @@ pm task add "Add user profiles" --project "web-app" --tags feature,backend
 # With changelist/CL tracking
 pm task add "Fix authentication" --cl 123456
 
+# With workspace tracking
+pm task add "Refactor authentication" --workspace "workspace-1"
+pm task add "Fix bug" --ws "workspace-2"  # --ws is short for --workspace
+
 # With description
 pm task add "Review pull requests" --description "Weekly PR review"
+
+# Combine multiple flags
+pm task add "New feature" --project "web-app" --workspace "main-workspace" --cl 789 --priority high
 ```
 
 ### Listing Tasks
@@ -87,9 +94,37 @@ pm task ls  # alias
 
 # Filter by project
 pm task list --project "web-app"
+
+# Filter by workspace
+pm task list --workspace "workspace-1"
+
+# Filter by status
+pm task list --status todo
+pm task list --status doing
+pm task list --status done
+pm task list --status blocked
+
+# Combine filters
+pm task list --project "web-app" --workspace "workspace-1" --status doing
 ```
 
-**Note:** Advanced filtering by status and search are currently available in the TUI mode.
+**Task List Output Format:**
+```
+Tasks:
+  [ ] [LOW] Task title (task-id)
+     * Project: project-name
+     * cl: changelist-number
+     * workspace: workspace-name
+     * completed: 2025-10-02 15:04:05
+```
+
+**Status Icons:**
+- `[ ]` - Todo
+- `[~]` - Doing (in progress)
+- `[x]` - Done (completed)
+- `[!]` - Blocked
+
+**Note:** Advanced search and other filtering options are currently available in the TUI mode.
 
 ### Updating Tasks
 ```bash
@@ -108,12 +143,66 @@ pm task update <task-id> --title "New task title"
 # Update changelist
 pm task update <task-id> --cl 789012
 
+# Update workspace
+pm task update <task-id> --workspace "workspace-2"
+pm task update <task-id> --ws "new-workspace"  # --ws is short for --workspace
+
+# Update multiple fields at once
+pm task update <task-id> --workspace "workspace-1" --status doing --priority high
+
 # Complete a task (shortcut)
 pm task complete <task-id>
 
 # Delete a task
 pm task delete <task-id>
 ```
+
+## Workspace Management
+
+Workspaces allow you to organize tasks by development environment, feature branch, or any other context. This is particularly useful when working on multiple tasks in different workspaces simultaneously.
+
+### Using Workspaces
+
+```bash
+# Create a task with a workspace
+pm task add "Implement feature X" --workspace "feature-branch-x" --project "web-app"
+
+# List tasks in a specific workspace
+pm task list --workspace "feature-branch-x"
+
+# Update task workspace
+pm task update <task-id> --workspace "main-workspace"
+
+# Switch task to different workspace
+pm task update <task-id> --ws "hotfix-workspace"
+```
+
+### Workspace Use Cases
+
+1. **Feature Development**: Organize tasks by feature branch
+   ```bash
+   pm task add "Add login form" --workspace "feature/auth" --project "web-app"
+   pm task add "Add JWT validation" --workspace "feature/auth" --project "web-app"
+   ```
+
+2. **Environment Separation**: Separate tasks by development environment
+   ```bash
+   pm task add "Test deployment" --workspace "staging"
+   pm task add "Fix production bug" --workspace "production"
+   ```
+
+3. **Multi-tasking**: Keep track of different work contexts
+   ```bash
+   pm task list --workspace "client-a"
+   pm task list --workspace "client-b"
+   ```
+
+4. **Team Coordination**: Share workspace names with team members
+   ```bash
+   pm task add "Review PR #123" --workspace "team-sprint-5"
+   ```
+
+**Note:** Workspace names are free-form text - use any naming convention that works for your workflow.
 
 ## Project Management
 
@@ -364,6 +453,8 @@ The interactive mode provides a rich terminal interface with:
 3. Set realistic due dates
 4. Break large tasks into subtasks
 5. Use projects to group related tasks
+6. Use workspaces to organize tasks by development environment or context
+7. Track changelists (CLs) for code review workflows
 
 ### Time Tracking
 1. Start tracking when you begin work
@@ -477,6 +568,7 @@ pm task delete <id>             # Delete task
 --project <name>
 --tags <tag1,tag2>
 --cl <changelist>
+--workspace <workspace-name>    # or --ws
 --description <text>
 --title <text>
 --status <todo|doing|done|blocked>

@@ -199,6 +199,9 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 				options.ProjectID = projectNameOrID
 			}
 			i++ // Skip the next argument as it's the value
+		} else if args[i] == "--workspace" && i+1 < len(args) {
+			options.Workspace = args[i+1]
+			i++ // Skip the next argument as it's the value
 		} else if args[i] == "--status" && i+1 < len(args) {
 			statusStr := args[i+1]
 			var status domain.TaskStatus
@@ -253,20 +256,37 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 			priority = "CRIT"
 		}
 
+		fmt.Printf("  %s [%s] %s (%s)\n", status, priority, t.Title, t.ID)
+
 		// Get project name if task has a project
-		projectStr := ""
+		projectName := ""
 		if t.ProjectID != "" {
 			if proj, err := projectRepo.GetByID(ctx, t.ProjectID); err == nil {
-				projectStr = fmt.Sprintf("[%s] ", proj.Name)
+				projectName = proj.Name
 			}
 		}
+		fmt.Printf("     * Project: %s\n", projectName)
 
+		// Show changelist if exists
 		changelistStr := ""
 		if t.Changelist != "" {
-			changelistStr = fmt.Sprintf(" (%s)", t.Changelist)
+			changelistStr = t.Changelist
 		}
+		fmt.Printf("     * cl: %s\n", changelistStr)
 
-		fmt.Printf("  %s [%s] %s%s%s (ID: %s)\n", status, priority, projectStr, t.Title, changelistStr, t.ID)
+		// Show workspace if exists
+		workspaceStr := ""
+		if t.Workspace != "" {
+			workspaceStr = t.Workspace
+		}
+		fmt.Printf("     * workspace: %s\n", workspaceStr)
+
+		// Show completed date if task is done
+		completedStr := ""
+		if t.CompletedAt != nil {
+			completedStr = t.CompletedAt.Format("2006-01-02 15:04:05")
+		}
+		fmt.Printf("     * completed: %s\n", completedStr)
 	}
 
 	return nil
@@ -305,6 +325,11 @@ func addTask(ctx context.Context, taskService *task.Service, projectRepo *sqlite
 			if i+1 < len(args) {
 				i++
 				input.Changelist = args[i]
+			}
+		case "--workspace", "--ws":
+			if i+1 < len(args) {
+				i++
+				input.Workspace = args[i]
 			}
 		case "--due":
 			if i+1 < len(args) {
@@ -406,6 +431,12 @@ func updateTask(ctx context.Context, taskService *task.Service, projectRepo *sql
 				i++
 				changelist := args[i]
 				input.Changelist = &changelist
+			}
+		case "--workspace", "--ws":
+			if i+1 < len(args) {
+				i++
+				workspace := args[i]
+				input.Workspace = &workspace
 			}
 		case "--due":
 			if i+1 < len(args) {

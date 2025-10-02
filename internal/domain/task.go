@@ -50,6 +50,7 @@ type Task struct {
 	ParentID    *string                `json:"parent_id" db:"parent_id"`
 	Tags        []string               `json:"tags" db:"tags"`
 	Changelist  string                 `json:"changelist" db:"changelist"`
+	Workspace   string                 `json:"workspace" db:"workspace"`
 	DueDate     *time.Time             `json:"due_date" db:"due_date"`
 	CreatedAt   time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at" db:"updated_at"`
