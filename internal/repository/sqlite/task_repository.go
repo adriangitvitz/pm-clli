@@ -29,9 +29,17 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
+	// Convert empty project_id to NULL to avoid foreign key constraint violations
+	var projectID interface{}
+	if task.ProjectID != "" {
+		projectID = task.ProjectID
+	} else {
+		projectID = nil
+	}
+
 	_, err := r.db.ExecContext(ctx, query,
 		task.ID, task.Title, task.Description, string(task.Status),
-		int(task.Priority), task.ProjectID, task.ParentID, string(tagsJSON),
+		int(task.Priority), projectID, task.ParentID, string(tagsJSON),
 		task.Changelist, task.Workspace, task.DueDate, task.CreatedAt, task.UpdatedAt, task.CompletedAt,
 		string(metadataJSON),
 	)
@@ -152,9 +160,17 @@ func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 		WHERE id = ?
 	`
 
+	// Convert empty project_id to NULL to avoid foreign key constraint violations
+	var projectID interface{}
+	if task.ProjectID != "" {
+		projectID = task.ProjectID
+	} else {
+		projectID = nil
+	}
+
 	result, err := r.db.ExecContext(ctx, query,
 		task.Title, task.Description, string(task.Status), int(task.Priority),
-		task.ProjectID, task.ParentID, string(tagsJSON), task.Changelist, task.Workspace, task.DueDate,
+		projectID, task.ParentID, string(tagsJSON), task.Changelist, task.Workspace, task.DueDate,
 		task.UpdatedAt, task.CompletedAt, string(metadataJSON), task.ID,
 	)
 

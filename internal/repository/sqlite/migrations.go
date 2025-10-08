@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	migrationVersion = 3
+	migrationVersion = 4
 )
 
 var migrations = []string{
@@ -73,6 +73,28 @@ var migrations = []string{
 
 	// Migration v3: Add workspace column
 	`ALTER TABLE tasks ADD COLUMN workspace TEXT DEFAULT '';`,
+
+	// Migration v4: Make project_id nullable in time_entries table
+	`CREATE TABLE IF NOT EXISTS time_entries_new (
+		id TEXT PRIMARY KEY,
+		task_id TEXT NOT NULL,
+		project_id TEXT,
+		description TEXT,
+		start_time DATETIME NOT NULL,
+		end_time DATETIME,
+		duration INTEGER,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		metadata TEXT,
+		FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+	);`,
+	`INSERT INTO time_entries_new SELECT * FROM time_entries;`,
+	`DROP TABLE time_entries;`,
+	`ALTER TABLE time_entries_new RENAME TO time_entries;`,
+	`CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_time_entries_start_time ON time_entries(start_time);`,
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {

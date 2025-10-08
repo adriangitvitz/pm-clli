@@ -34,8 +34,16 @@ func (r *TimeEntryRepository) Create(ctx context.Context, entry *domain.TimeEntr
 		durationNanos = &nanos
 	}
 
+	// Convert empty project_id to NULL to avoid foreign key constraint violations
+	var projectID interface{}
+	if entry.ProjectID != "" {
+		projectID = entry.ProjectID
+	} else {
+		projectID = nil
+	}
+
 	_, err := r.db.ExecContext(ctx, query,
-		entry.ID, entry.TaskID, entry.ProjectID, entry.Description,
+		entry.ID, entry.TaskID, projectID, entry.Description,
 		entry.StartTime, entry.EndTime, durationNanos, entry.CreatedAt,
 		entry.UpdatedAt, string(metadataJSON),
 	)
@@ -144,8 +152,16 @@ func (r *TimeEntryRepository) Update(ctx context.Context, entry *domain.TimeEntr
 		durationNanos = &nanos
 	}
 
+	// Convert empty project_id to NULL to avoid foreign key constraint violations
+	var projectID interface{}
+	if entry.ProjectID != "" {
+		projectID = entry.ProjectID
+	} else {
+		projectID = nil
+	}
+
 	result, err := r.db.ExecContext(ctx, query,
-		entry.TaskID, entry.ProjectID, entry.Description, entry.StartTime,
+		entry.TaskID, projectID, entry.Description, entry.StartTime,
 		entry.EndTime, durationNanos, entry.UpdatedAt, string(metadataJSON),
 		entry.ID,
 	)
@@ -218,17 +234,22 @@ func (r *TimeEntryRepository) GetByProject(ctx context.Context, projectID string
 func (r *TimeEntryRepository) scanTimeEntry(row RowScanner) (*domain.TimeEntry, error) {
 	var entry domain.TimeEntry
 	var metadataJSON string
+	var projectID sql.NullString
 	var endTime sql.NullTime
 	var durationNanos sql.NullInt64
 
 	err := row.Scan(
-		&entry.ID, &entry.TaskID, &entry.ProjectID, &entry.Description,
+		&entry.ID, &entry.TaskID, &projectID, &entry.Description,
 		&entry.StartTime, &endTime, &durationNanos, &entry.CreatedAt,
 		&entry.UpdatedAt, &metadataJSON,
 	)
 
 	if err != nil {
 		return nil, err
+	}
+
+	if projectID.Valid {
+		entry.ProjectID = projectID.String
 	}
 
 	if endTime.Valid {

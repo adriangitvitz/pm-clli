@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -39,6 +40,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
+	
 	defer db.Close()
 
 	// Initialize repositories
@@ -77,10 +79,14 @@ func runCLI(taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectReposito
 	case "export":
 		exportService := export.NewService(taskRepo, projectRepo, timeEntryRepo)
 		return handleExportCommand(exportService, os.Args[2:])
+	case "workspace":
+		return handleWorkspaceCommand(taskRepo, os.Args[2:])
 	case "config":
 		return handleConfigCommand(cfg, os.Args[2:])
 	case "git":
 		return handleGitCommand(gitRepo, os.Args[2:])
+	case "prune":
+		return handlePruneCommand(taskRepo, projectRepo, timeEntryRepo)
 	case "version":
 		fmt.Println("Project Manager CLI v1.0.0")
 		return nil
@@ -103,13 +109,15 @@ func runTUI(taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectReposito
 
 func handleTaskCommand(taskService *task.Service, projectRepo *sqlite.ProjectRepository, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("task command requires a subcommand")
+		return showTaskHelp()
 	}
 
 	ctx := context.Background()
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showTaskHelp()
 	case "list", "ls":
 		return listTasks(ctx, taskService, projectRepo, args[1:])
 	case "add", "create":
@@ -139,13 +147,15 @@ func handleTaskCommand(taskService *task.Service, projectRepo *sqlite.ProjectRep
 
 func handleProjectCommand(projectService *project.Service, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("project command requires a subcommand")
+		return showProjectHelp()
 	}
 
 	ctx := context.Background()
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showProjectHelp()
 	case "list", "ls":
 		return listProjects(ctx, projectService)
 	case "add", "create":
@@ -165,13 +175,15 @@ func handleProjectCommand(projectService *project.Service, args []string) error 
 
 func handleTimeCommand(timeSvc *timeService.Service, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("time command requires a subcommand")
+		return showTimeHelp()
 	}
 
 	ctx := context.Background()
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showTimeHelp()
 	case "start":
 		return startTimeTracking(ctx, timeSvc, args[1:])
 	case "stop":
@@ -356,9 +368,13 @@ func addTask(ctx context.Context, taskService *task.Service, projectRepo *sqlite
 				// Try to look up project by name first
 				if proj, err := projectRepo.GetByName(ctx, projectNameOrID); err == nil {
 					input.ProjectID = proj.ID
+				} else if proj, err := projectRepo.GetByID(ctx, projectNameOrID); err == nil {
+					// Try by ID if name lookup failed
+					input.ProjectID = proj.ID
 				} else {
-					// If not found by name, assume it's an ID
-					input.ProjectID = projectNameOrID
+					// Project doesn't exist, leave ProjectID empty
+					// This prevents foreign key constraint violations
+					fmt.Fprintf(os.Stderr, "Warning: project '%s' not found, creating task without project\n", projectNameOrID)
 				}
 			}
 		case "--description":
@@ -464,9 +480,13 @@ func updateTask(ctx context.Context, taskService *task.Service, projectRepo *sql
 				// Try to look up project by name first
 				if proj, err := projectRepo.GetByName(ctx, projectNameOrID); err == nil {
 					input.ProjectID = &proj.ID
+				} else if proj, err := projectRepo.GetByID(ctx, projectNameOrID); err == nil {
+					// Try by ID if name lookup failed
+					input.ProjectID = &proj.ID
 				} else {
-					// If not found by name, assume it's an ID
-					input.ProjectID = &projectNameOrID
+					// Project doesn't exist, don't update project field
+					// This prevents foreign key constraint violations
+					fmt.Fprintf(os.Stderr, "Warning: project '%s' not found, not updating project field\n", projectNameOrID)
 				}
 			}
 		}
@@ -676,13 +696,15 @@ func listTimeEntries(ctx context.Context, timeSvc *timeService.Service, args []s
 // Export handlers
 func handleExportCommand(exportSvc *export.Service, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("export command requires a subcommand (tasks, time)")
+		return showExportHelp()
 	}
 
 	ctx := context.Background()
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showExportHelp()
 	case "tasks":
 		return exportTasks(ctx, exportSvc, args[1:])
 	case "time":
@@ -797,12 +819,14 @@ func exportTime(ctx context.Context, exportSvc *export.Service, args []string) e
 // Config handlers
 func handleConfigCommand(cfg *domain.Config, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("config command requires a subcommand (show, set)")
+		return showConfigHelp()
 	}
 
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showConfigHelp()
 	case "show":
 		return showConfig(cfg)
 	case "set":
@@ -855,12 +879,14 @@ func setConfig(cfg *domain.Config, args []string) error {
 // Git handlers
 func handleGitCommand(gitRepo *git.GitRepository, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("git command requires a subcommand (hook)")
+		return showGitHelp()
 	}
 
 	subcommand := args[0]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		return showGitHelp()
 	case "hook":
 		return handleGitHook(gitRepo, args[1:])
 	default:
@@ -904,7 +930,295 @@ func handleGitHook(gitRepo *git.GitRepository, args []string) error {
 	return nil
 }
 
+// Workspace handlers
+func handleWorkspaceCommand(taskRepo *sqlite.TaskRepository, args []string) error {
+	if len(args) == 0 {
+		return showWorkspaceHelp()
+	}
+
+	ctx := context.Background()
+	subcommand := args[0]
+
+	switch subcommand {
+	case "help", "--help", "-h":
+		return showWorkspaceHelp()
+	case "list":
+		return listWorkspaces(ctx, taskRepo)
+	default:
+		return fmt.Errorf("unknown workspace subcommand: %s", subcommand)
+	}
+}
+
+func listWorkspaces(ctx context.Context, taskRepo *sqlite.TaskRepository) error {
+	// Get all tasks and extract unique workspaces
+	filter := domain.TaskFilter{}
+	tasks, err := taskRepo.List(ctx, filter)
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	// Collect unique workspaces
+	workspaceSet := make(map[string]bool)
+	for _, task := range tasks {
+		if task.Workspace != "" {
+			workspaceSet[task.Workspace] = true
+		}
+	}
+
+	if len(workspaceSet) == 0 {
+		fmt.Println("No workspaces found")
+		return nil
+	}
+
+	// Convert to sorted list
+	workspaces := make([]string, 0, len(workspaceSet))
+	for ws := range workspaceSet {
+		workspaces = append(workspaces, ws)
+	}
+
+	fmt.Println("Workspaces:")
+	for _, ws := range workspaces {
+		fmt.Printf("  %s\n", ws)
+	}
+
+	return nil
+}
+
+// Prune handler
+func handlePruneCommand(taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectRepository, timeEntryRepo *sqlite.TimeEntryRepository) error {
+	ctx := context.Background()
+
+	// Get counts for confirmation message
+	tasks, err := taskRepo.List(ctx, domain.TaskFilter{})
+	if err != nil {
+		return fmt.Errorf("failed to count tasks: %w", err)
+	}
+
+	projects, err := projectRepo.List(ctx, domain.ProjectFilter{})
+	if err != nil {
+		return fmt.Errorf("failed to count projects: %w", err)
+	}
+
+	timeEntries, err := timeEntryRepo.List(ctx, domain.TimeEntryFilter{})
+	if err != nil {
+		return fmt.Errorf("failed to count time entries: %w", err)
+	}
+
+	// Show warning and ask for confirmation
+	fmt.Println("WARNING: This will delete ALL data from the database!")
+	fmt.Printf("  - %d tasks\n", len(tasks))
+	fmt.Printf("  - %d projects\n", len(projects))
+	fmt.Printf("  - %d time entries\n", len(timeEntries))
+	fmt.Println()
+	fmt.Print("Are you sure you want to continue? Type 'yes' to confirm: ")
+
+	// Read user input
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+
+	// Trim whitespace and check confirmation
+	input = strings.TrimSpace(input)
+	if input != "yes" {
+		fmt.Println("Prune operation cancelled")
+		return nil
+	}
+
+	// Delete all data in the correct order (time entries, tasks, projects)
+	// Time entries first since they reference tasks
+	for _, entry := range timeEntries {
+		if err := timeEntryRepo.Delete(ctx, entry.ID); err != nil {
+			return fmt.Errorf("failed to delete time entry %s: %w", entry.ID, err)
+		}
+	}
+
+	// Tasks next (they reference projects)
+	for _, task := range tasks {
+		if err := taskRepo.Delete(ctx, task.ID); err != nil {
+			return fmt.Errorf("failed to delete task %s: %w", task.ID, err)
+		}
+	}
+
+	// Projects last
+	for _, project := range projects {
+		if err := projectRepo.Delete(ctx, project.ID); err != nil {
+			return fmt.Errorf("failed to delete project %s: %w", project.ID, err)
+		}
+	}
+
+	fmt.Println("Successfully pruned all data from the database")
+	return nil
+}
+
 // Help system
+func showTaskHelp() error {
+	helpText := `Task Management Commands
+
+USAGE:
+  pm task [subcommand] [flags]
+
+SUBCOMMANDS:
+  list, ls           List tasks
+  add, create        Create a new task
+  update             Update an existing task
+  complete           Mark a task as complete
+  delete, rm         Delete a task
+
+EXAMPLES:
+  pm task add "Fix bug" --priority high --project MyProject
+  pm task list --status todo --project MyProject
+  pm task list --minimal
+  pm task update <id> --status doing
+  pm task complete <id>
+  pm task delete <id>
+
+FLAGS:
+  --project <name>         Filter/assign by project name or ID
+  --status <status>        Filter/set status (todo, doing, done, blocked)
+  --priority <priority>    Set priority (low, normal, high, critical)
+  --workspace <name>       Filter/assign workspace
+  --changelist, --cl       Set changelist
+  --tags <tag1,tag2>       Set tags (comma-separated)
+  --description <text>     Set description
+  --minimal                Show minimal output format
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showProjectHelp() error {
+	helpText := `Project Management Commands
+
+USAGE:
+  pm project [subcommand] [flags]
+
+SUBCOMMANDS:
+  list, ls           List all projects
+  add, create        Create a new project
+  delete, rm         Delete a project
+
+EXAMPLES:
+  pm project add "MyProject"
+  pm project list
+  pm project delete <id>
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showTimeHelp() error {
+	helpText := `Time Tracking Commands
+
+USAGE:
+  pm time [subcommand] [flags]
+
+SUBCOMMANDS:
+  start              Start time tracking for a task
+  stop               Stop active time tracking
+  report             Generate time report
+  list               List time entries
+
+EXAMPLES:
+  pm time start --task <task-id>
+  pm time start --task <task-id> --description "Working on feature"
+  pm time stop
+  pm time report --today
+  pm time report --week
+  pm time report --month
+  pm time report --yesterday
+  pm time list
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showWorkspaceHelp() error {
+	helpText := `Workspace Management Commands
+
+USAGE:
+  pm workspace [subcommand]
+
+SUBCOMMANDS:
+  list               List all workspaces
+
+EXAMPLES:
+  pm workspace list
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showExportHelp() error {
+	helpText := `Export Commands
+
+USAGE:
+  pm export [subcommand] [flags]
+
+SUBCOMMANDS:
+  tasks              Export tasks
+  time               Export time entries
+
+EXAMPLES:
+  pm export tasks --format json
+  pm export tasks --format csv --output tasks.csv
+  pm export tasks --format ical --output tasks.ical
+  pm export time --format json
+  pm export time --format csv --output time.csv
+
+FLAGS:
+  --format <format>  Export format (json, csv, ical for tasks; json, csv for time)
+  --output <file>    Output file path (prints to stdout if not specified)
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showConfigHelp() error {
+	helpText := `Configuration Commands
+
+USAGE:
+  pm config [subcommand] [flags]
+
+SUBCOMMANDS:
+  show               Show current configuration
+  set                Set a configuration value
+
+EXAMPLES:
+  pm config show
+  pm config set git_integration true
+  pm config set default_project MyProject
+  pm config set time_format "15:04:05"
+  pm config set date_format "2006-01-02"
+
+AVAILABLE KEYS:
+  git_integration    Enable/disable git integration (true/false)
+  default_project    Set default project name
+  time_format        Set time display format
+  date_format        Set date display format
+`
+	fmt.Println(helpText)
+	return nil
+}
+
+func showGitHelp() error {
+	helpText := `Git Integration Commands
+
+USAGE:
+  pm git [subcommand] [flags]
+
+SUBCOMMANDS:
+  hook               Manage git commit hooks
+
+EXAMPLES:
+  pm git hook --task <task-id>
+  pm git hook --remove
+`
+	fmt.Println(helpText)
+	return nil
+}
+
 func showHelp() error {
 	helpText := `Project Manager CLI - Task and Time Management
 
@@ -914,10 +1228,12 @@ USAGE:
 COMMANDS:
   task        Manage tasks
   project     Manage projects
+  workspace   Manage workspaces
   time        Track time
   export      Export data
   config      Manage configuration
   git         Git integration
+  prune       Delete all data (with confirmation)
   version     Show version
   help        Show this help
 
@@ -932,6 +1248,9 @@ PROJECT COMMANDS:
   pm project add <name>
   pm project list
   pm project delete <id>
+
+WORKSPACE COMMANDS:
+  pm workspace list
 
 TIME COMMANDS:
   pm time start --task <task-id> [--description <desc>]
@@ -950,6 +1269,9 @@ CONFIG COMMANDS:
 GIT COMMANDS:
   pm git hook --task <task-id>
   pm git hook --remove
+
+PRUNE COMMAND:
+  pm prune    Delete all tasks, projects, and time entries (requires confirmation)
 
 INTERACTIVE MODE:
   pm          Launch interactive TUI
