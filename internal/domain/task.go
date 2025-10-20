@@ -41,21 +41,26 @@ func (p Priority) String() string {
 }
 
 type Task struct {
-	ID          string                 `json:"id" db:"id"`
-	Title       string                 `json:"title" db:"title"`
-	Description string                 `json:"description" db:"description"`
-	Status      TaskStatus             `json:"status" db:"status"`
-	Priority    Priority               `json:"priority" db:"priority"`
-	ProjectID   string                 `json:"project_id" db:"project_id"`
-	ParentID    *string                `json:"parent_id" db:"parent_id"`
-	Tags        []string               `json:"tags" db:"tags"`
-	Changelist  string                 `json:"changelist" db:"changelist"`
-	Workspace   string                 `json:"workspace" db:"workspace"`
-	DueDate     *time.Time             `json:"due_date" db:"due_date"`
-	CreatedAt   time.Time              `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at" db:"updated_at"`
-	CompletedAt *time.Time             `json:"completed_at" db:"completed_at"`
-	Metadata    map[string]interface{} `json:"metadata" db:"metadata"`
+	ID            string                 `json:"id" db:"id"`
+	Title         string                 `json:"title" db:"title"`
+	Description   string                 `json:"description" db:"description"`
+	Status        TaskStatus             `json:"status" db:"status"`
+	Priority      Priority               `json:"priority" db:"priority"`
+	ProjectID     string                 `json:"project_id" db:"project_id"`
+	ParentID      *string                `json:"parent_id" db:"parent_id"`
+	Tags          []string               `json:"tags" db:"tags"`
+	Changelist    string                 `json:"changelist" db:"changelist"`
+	Workspace     string                 `json:"workspace" db:"workspace"`
+	DueDate       *time.Time             `json:"due_date" db:"due_date"`
+	CreatedAt     time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time              `json:"updated_at" db:"updated_at"`
+	CompletedAt   *time.Time             `json:"completed_at" db:"completed_at"`
+	Metadata      map[string]interface{} `json:"metadata" db:"metadata"`
+	NoteID        *string                `json:"note_id,omitempty" db:"note_id"`
+	NotePath      *string                `json:"note_path,omitempty" db:"note_path"`
+	HasNote       bool                   `json:"has_note" db:"has_note"`
+	NoteCreatedAt *time.Time             `json:"note_created_at,omitempty" db:"note_created_at"`
+	NoteUpdatedAt *time.Time             `json:"note_updated_at,omitempty" db:"note_updated_at"`
 }
 
 func NewTask(title, description string) *Task {

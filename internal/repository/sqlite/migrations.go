@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	migrationVersion = 4
+	migrationVersion = 5
 )
 
 var migrations = []string{
@@ -41,6 +41,13 @@ var migrations = []string{
 		updated_at DATETIME NOT NULL,
 		completed_at DATETIME,
 		metadata TEXT,
+		changelist TEXT DEFAULT '',
+		workspace TEXT DEFAULT '',
+		note_id TEXT,
+		note_path TEXT,
+		has_note BOOLEAN DEFAULT 0,
+		note_created_at DATETIME,
+		note_updated_at DATETIME,
 		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
 		FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
 	);`,
@@ -48,7 +55,7 @@ var migrations = []string{
 	`CREATE TABLE IF NOT EXISTS time_entries (
 		id TEXT PRIMARY KEY,
 		task_id TEXT NOT NULL,
-		project_id TEXT NOT NULL,
+		project_id TEXT,
 		description TEXT,
 		start_time DATETIME NOT NULL,
 		end_time DATETIME,
@@ -64,6 +71,8 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);`,
 	`CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id);`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_has_note ON tasks(has_note);`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_note_id ON tasks(note_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_start_time ON time_entries(start_time);`,
@@ -95,6 +104,15 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_project_id ON time_entries(project_id);`,
 	`CREATE INDEX IF NOT EXISTS idx_time_entries_start_time ON time_entries(start_time);`,
+
+	// Migration v5: Add note linking columns
+	`ALTER TABLE tasks ADD COLUMN note_id TEXT;`,
+	`ALTER TABLE tasks ADD COLUMN note_path TEXT;`,
+	`ALTER TABLE tasks ADD COLUMN has_note BOOLEAN DEFAULT 0;`,
+	`ALTER TABLE tasks ADD COLUMN note_created_at DATETIME;`,
+	`ALTER TABLE tasks ADD COLUMN note_updated_at DATETIME;`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_has_note ON tasks(has_note);`,
+	`CREATE INDEX IF NOT EXISTS idx_tasks_note_id ON tasks(note_id);`,
 }
 
 func RunMigrations(ctx context.Context, db *sql.DB) error {
@@ -113,18 +131,23 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 	}
 	defer tx.Rollback()
 
-	// Only run migrations that haven't been executed yet
-	// First 10 migrations are base schema, v2 is migration 11 (index 11), v3 is migration 12 (index 12)
-	startIndex := 0
-	if currentVersion > 0 {
-		// Base schema (migrations 0-9) + version migrations
-		// If we're at version 2, we've run migrations 0-11, so start at 12
-		startIndex = 10 + currentVersion
-	}
-
-	for i := startIndex; i < len(migrations); i++ {
-		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
-			return fmt.Errorf("failed to execute migration %d: %w", i, err)
+	// For fresh install (version 0), run base schema with all fields
+	if currentVersion == 0 {
+		// Run base schema (migrations 0-12: 4 tables + 9 indices)
+		// Base schema already includes changelist, workspace, and note fields
+		// Skip ALTER TABLE migrations (13+) since base schema has everything
+		for i := 0; i <= 12; i++ {
+			if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
+				return fmt.Errorf("failed to execute migration %d: %w", i, err)
+			}
+		}
+	} else {
+		// For existing databases, run incremental migrations
+		startIndex := 10 + currentVersion
+		for i := startIndex; i < len(migrations); i++ {
+			if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
+				return fmt.Errorf("failed to execute migration %d: %w", i, err)
+			}
 		}
 	}
 

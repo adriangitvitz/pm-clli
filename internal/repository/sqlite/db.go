@@ -19,7 +19,9 @@ func NewDB(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	// Add _time_format parameter to properly handle DATETIME columns
+	connStr := dbPath + "?_time_format=sqlite"
+	db, err := sql.Open("sqlite", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

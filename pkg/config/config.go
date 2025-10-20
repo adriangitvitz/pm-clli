@@ -37,8 +37,11 @@ func Load() (*domain.Config, error) {
 		return nil, err
 	}
 
-	// Ensure database path is absolute
-	if !filepath.IsAbs(config.DatabasePath) {
+	// Override database path with PM_DB_PATH environment variable if set
+	if dbPath := os.Getenv("PM_DB_PATH"); dbPath != "" {
+		config.DatabasePath = dbPath
+	} else if !filepath.IsAbs(config.DatabasePath) {
+		// Ensure database path is absolute if using config file path
 		homeDir, _ := os.UserHomeDir()
 		config.DatabasePath = filepath.Join(homeDir, configDirName, config.DatabasePath)
 	}
@@ -76,8 +79,12 @@ func getConfigPath() string {
 
 // getDefaultConfig returns the default configuration
 func getDefaultConfig() *domain.Config {
-	homeDir, _ := os.UserHomeDir()
-	dbPath := filepath.Join(homeDir, configDirName, "tasks.db")
+	// Check for PM_DB_PATH environment variable first
+	dbPath := os.Getenv("PM_DB_PATH")
+	if dbPath == "" {
+		homeDir, _ := os.UserHomeDir()
+		dbPath = filepath.Join(homeDir, configDirName, "tasks.db")
+	}
 
 	return &domain.Config{
 		DatabasePath:   dbPath,

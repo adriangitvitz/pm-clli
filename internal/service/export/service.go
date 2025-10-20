@@ -64,6 +64,7 @@ func (s *Service) ExportTasksToCSV(ctx context.Context, filter domain.TaskFilter
 	header := []string{
 		"ID", "Title", "Description", "Status", "Priority", "Project ID",
 		"Tags", "Due Date", "Created At", "Updated At", "Completed At",
+		"Note ID", "Note Path", "Has Note", "Note Created", "Note Updated",
 	}
 	if err := writer.Write(header); err != nil {
 		return nil, fmt.Errorf("failed to write CSV header: %w", err)
@@ -79,6 +80,27 @@ func (s *Service) ExportTasksToCSV(ctx context.Context, filter domain.TaskFilter
 			completedAt = task.CompletedAt.Format("2006-01-02 15:04:05")
 		}
 
+		// Handle note fields
+		var noteID, notePath, noteCreated, noteUpdated string
+		var hasNote string
+		if task.NoteID != nil {
+			noteID = *task.NoteID
+		}
+		if task.NotePath != nil {
+			notePath = *task.NotePath
+		}
+		if task.HasNote {
+			hasNote = "true"
+		} else {
+			hasNote = "false"
+		}
+		if task.NoteCreatedAt != nil {
+			noteCreated = task.NoteCreatedAt.Format("2006-01-02 15:04:05")
+		}
+		if task.NoteUpdatedAt != nil {
+			noteUpdated = task.NoteUpdatedAt.Format("2006-01-02 15:04:05")
+		}
+
 		record := []string{
 			task.ID,
 			task.Title,
@@ -91,6 +113,11 @@ func (s *Service) ExportTasksToCSV(ctx context.Context, filter domain.TaskFilter
 			task.CreatedAt.Format("2006-01-02 15:04:05"),
 			task.UpdatedAt.Format("2006-01-02 15:04:05"),
 			completedAt,
+			noteID,
+			notePath,
+			hasNote,
+			noteCreated,
+			noteUpdated,
 		}
 
 		if err := writer.Write(record); err != nil {

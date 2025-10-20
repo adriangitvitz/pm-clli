@@ -70,7 +70,7 @@ func runCLI(taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectReposito
 
 	switch command {
 	case "task":
-		return handleTaskCommand(taskService, projectRepo, os.Args[2:])
+		return handleTaskCommand(taskService, taskRepo, projectRepo, os.Args[2:])
 	case "project":
 		return handleProjectCommand(projectService, os.Args[2:])
 	case "time":
@@ -107,7 +107,7 @@ func runTUI(taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectReposito
 	return err
 }
 
-func handleTaskCommand(taskService *task.Service, projectRepo *sqlite.ProjectRepository, args []string) error {
+func handleTaskCommand(taskService *task.Service, taskRepo *sqlite.TaskRepository, projectRepo *sqlite.ProjectRepository, args []string) error {
 	if len(args) == 0 {
 		return showTaskHelp()
 	}
@@ -140,6 +140,8 @@ func handleTaskCommand(taskService *task.Service, projectRepo *sqlite.ProjectRep
 			return fmt.Errorf("task delete requires a task ID")
 		}
 		return deleteTask(ctx, taskService, args[1])
+	case "note":
+		return handleTaskNoteCommand(taskRepo, args[1:])
 	default:
 		return fmt.Errorf("unknown task subcommand: %s", subcommand)
 	}
@@ -311,6 +313,13 @@ func listTasks(ctx context.Context, taskService *task.Service, projectRepo *sqli
 				completedStr = t.CompletedAt.Format("2006-01-02 15:04:05")
 			}
 			fmt.Printf("     * completed: %s\n", completedStr)
+
+			// Show note link status
+			noteStatus := "no"
+			if t.HasNote {
+				noteStatus = "yes"
+			}
+			fmt.Printf("     * note linked: %s\n", noteStatus)
 		}
 	}
 
@@ -1065,6 +1074,7 @@ SUBCOMMANDS:
   update             Update an existing task
   complete           Mark a task as complete
   delete, rm         Delete a task
+  note               Manage note links (see 'pm task note help')
 
 EXAMPLES:
   pm task add "Fix bug" --priority high --project MyProject
@@ -1073,6 +1083,7 @@ EXAMPLES:
   pm task update <id> --status doing
   pm task complete <id>
   pm task delete <id>
+  pm task note link <task-id> <note-id>
 
 FLAGS:
   --project <name>         Filter/assign by project name or ID
